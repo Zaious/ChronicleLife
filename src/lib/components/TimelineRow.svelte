@@ -3,6 +3,9 @@
    * 時間軸單列。純呈現元件:輸入 task + now + settings + 分類色,自行算出
    * 長度比例 / 列模式 / 檢查點狀態(呼叫 core/timeline.ts 的純函式),不碰 store。
    * 規格見 docs/PLANNING.md §2。
+   *
+   * 視覺:整列是一顆膠囊(文字的底,任何背景上都讀得清);膠囊裡的空間就是整段「時間視窗」,
+   * 彩色條是還剩下的部分 —— 條越短、膠囊越空,不需要另外畫刻度。
    */
   import type { Task, Settings } from '../core/types';
   import {
@@ -13,19 +16,15 @@
     overdueDays as computeOverdueDays,
     formatCountdown,
     isoToMs,
+    type CheckpointState,
   } from '../core/timeline';
   import { secondNow } from '../stores/secondNow';
 
   /** 即使剩餘時間趨近於 0,也保留一小截可見殘條 (PLANNING.md §2.1)。 */
   const MIN_BAR_WIDTH_PX = 6;
 
-  /**
-   * 逾期灰階樣式需要主題感知:深色底用 #888888 對比已足夠;
-   * 淺色底(白底深字)同一個灰在白底上太淡,改用較深的 #666666 維持可讀對比。
-   */
-  const OVERDUE_GRAY: Record<'dark' | 'light', string> = { dark: '#888888', light: '#666666' };
-  const CHECKPOINT_DUE_COLOR = '#ff453a';
-  const LABEL_COLOR_NORMAL = 'var(--label-color, rgba(240, 240, 240, 0.92))';
+  /** 檢查點刻線寬度(px):到期的加粗,位置不變。 */
+  const TICK_WIDTH_PX: Record<CheckpointState, number> = { upcoming: 2, due: 3, acked: 2 };
 
   interface Props {
     task: Task;
@@ -34,15 +33,17 @@
     settings: Settings;
     /** 該任務所屬分類的顯示色(未分類已由呼叫端解析為 UNCATEGORIZED_COLOR) */
     categoryColor: string;
-    /** 目前生效的主題,用於逾期灰階樣式的對比調整 */
-    themeMode: 'dark' | 'light';
+    /** 是否為「下一件」(剩餘時間最短且未逾期),以琥珀色外框標出 */
+    isNext?: boolean;
     /** 點擊整列 → 通知呼叫端開啟編輯 popover(PLANNING.md §2.5) */
     onOpen?: (task: Task, rowEl: HTMLElement) => void;
   }
 
-  const { task, now, settings, categoryColor, themeMode, onOpen }: Props = $props();
+  const { task, now, settings, categoryColor, isNext = false, onOpen }: Props = $props();
 
   let trackWidth = $state(0);
+  /** tail 模式的標籤寬度(含內距),用來判斷標籤放不放得進條尾端之後。 */
+  let tailLabelWidth = $state(0);
   let rowEl: HTMLDivElement | undefined = $state();
 
   const deadlineMs = $derived(isoToMs(task.deadline));
@@ -108,40 +109,37 @@
     return `${formatMD(ms)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  const labelText = $derived(
+  /**
+   * tail 模式:標籤放得下就貼在條尾端;放不下(長條)就貼著軌道的另一端,
+   * 並自帶底色蓋在條上,不會被擠出視窗。
+   */
+  const tailLabelOverlaps = $derived(barWidthPx + tailLabelWidth > trackWidth);
+  const tailLabelOffsetPx = $derived(
+    tailLabelOverlaps ? Math.max(0, trackWidth - tailLabelWidth) : barWidthPx,
+  );
+
+  /** 整列的 hover 提示:完整截止時間(標籤只顯示 M/D,年份與時分藏在這裡)。 */
+  const rowTitle = $derived(`${task.title} · ${new Date(deadlineMs).getFullYear()}/${formatMDHm(deadlineMs)} 截止`);
+
+  /** 標籤前段(日期 / 倒數 / 逾期天數)與後段(標題)分開渲染:前者等寬字、依模式換色。 */
+  const whenText = $derived(
     mode === 'overdue'
-      ? `已逾期 ${overdueDaysVal} 天 ${task.title}`
+      ? `已逾期 ${overdueDaysVal} 天`
       : mode === 'countdown'
-        ? `${formatCountdown(deadlineMs - effectiveNow)} ${task.title}`
-        : `${formatMD(deadlineMs)} ${task.title}`,
+        ? formatCountdown(deadlineMs - effectiveNow)
+        : formatMD(deadlineMs),
   );
 
+  /** 條色:逾期依設定用「逾期色」或灰;其餘用分類色。以 CSS 變數 --c 傳給樣式。 */
   const barColor = $derived(
-    mode === 'overdue'
-      ? settings.overdueStyle === 'gray'
-        ? OVERDUE_GRAY[themeMode]
-        : '#e24b4a'
-      : categoryColor,
+    mode === 'overdue' ? (settings.overdueStyle === 'gray' ? 'var(--muted)' : 'var(--strike)') : categoryColor,
   );
-  const labelColor = $derived(mode === 'overdue' ? barColor : LABEL_COLOR_NORMAL);
-
-  /** 簡易變暗:往黑色方向混色 amount ∈ [0,1]。 */
-  function darken(hex: string, amount: number): string {
-    const m = /^#([0-9a-f]{6})$/i.exec(hex);
-    if (!m) return hex;
-    const num = parseInt(m[1], 16);
-    const r = Math.round(((num >> 16) & 0xff) * (1 - amount));
-    const g = Math.round(((num >> 8) & 0xff) * (1 - amount));
-    const b = Math.round((num & 0xff) * (1 - amount));
-    return `rgb(${r}, ${g}, ${b})`;
-  }
 
   interface CheckpointVisual {
     id: string;
     offsetPx: number;
-    color: string;
+    state: CheckpointState;
     widthPx: number;
-    opacity: number;
     title: string;
   }
 
@@ -152,73 +150,72 @@
       const offset = checkpointOffsetRatio(deadlineMs, cpMs, settings.windowDays);
       if (offset == null) continue;
       const state = checkpointState(cp, now);
-      const base =
-        state === 'due'
-          ? { color: CHECKPOINT_DUE_COLOR, widthPx: 3, opacity: 1 }
-          : state === 'acked'
-            ? { color: darken(categoryColor, 0.35), widthPx: 2, opacity: 0.4 }
-            : { color: darken(categoryColor, 0.35), widthPx: 2, opacity: 1 };
+      const widthPx = TICK_WIDTH_PX[state];
       result.push({
         id: cp.id,
-        offsetPx: offset * trackWidth,
+        offsetPx: offset * trackWidth - widthPx / 2,
+        state,
+        widthPx,
         title: `${cp.label} ${formatMDHm(cpMs)}`,
-        ...base,
       });
     }
     return result;
   });
 </script>
 
+{#snippet label(tail: boolean)}
+  <span
+    class="label"
+    class:label-tail={tail}
+    class:overlap={tail && tailLabelOverlaps}
+    bind:clientWidth={tailLabelWidth}
+    style:left={tail && anchorSide === 'left' ? `${tailLabelOffsetPx}px` : undefined}
+    style:right={tail && anchorSide === 'right' ? `${tailLabelOffsetPx}px` : undefined}
+  >
+    <span class="when" class:accent={mode === 'countdown'} class:strike={mode === 'overdue'}>{whenText}</span>
+    <span class="title">{task.title}</span>
+  </span>
+{/snippet}
+
 <div
   class="row"
+  class:next={isNext}
+  class:blink={isBlinking}
+  class:edge={labelIsEdgeSibling}
+  class:dock-left={settings.dockSide === 'left'}
+  class:dock-right={settings.dockSide === 'right'}
   role="button"
   tabindex="0"
+  title={rowTitle}
   bind:this={rowEl}
   style:font-size="{settings.fontSizePx}px"
+  style:--bar-h="{settings.barHeightPx}px"
+  style:--c={barColor}
   onclick={handleRowClick}
   onkeydown={handleRowKeydown}
 >
   {#if edgeLabelBeforeTrack}
-    <span class="label" style:color={labelColor}><span class="label-text">{labelText}</span></span>
+    {@render label(false)}
   {/if}
 
-  <div
-    class="track"
-    style:height="{settings.barHeightPx}px"
-    bind:clientWidth={trackWidth}
-  >
-    <div
-      class="bar"
-      class:blink={isBlinking}
-      style="{anchorSide}: 0px;"
-      style:background={barColor}
-      style:height="{settings.barHeightPx}px"
-      style:width="{barWidthPx}px"
-    ></div>
+  <div class="track" bind:clientWidth={trackWidth}>
+    <div class="bar" style="{anchorSide}: 0px; width: {barWidthPx}px;"></div>
 
     {#each checkpointVisuals as cp (cp.id)}
       <div
-        class="checkpoint-line"
+        class="tick {cp.state}"
         title={cp.title}
-        style="{anchorSide}: {cp.offsetPx - cp.widthPx / 2}px;"
-        style:background={cp.color}
-        style:opacity={cp.opacity}
-        style:width="{cp.widthPx}px"
-        style:height="{settings.barHeightPx + 6}px"
+        style="{anchorSide}: {cp.offsetPx}px; width: {cp.widthPx}px;"
       ></div>
     {/each}
 
     {#if !labelIsEdgeSibling}
-      <span
-        class="label label-tail"
-        style="{anchorSide}: {barWidthPx}px;"
-        style:color={labelColor}
-      ><span class="label-text">{labelText}</span></span>
+      {@render label(true)}
     {/if}
   </div>
 
   {#if edgeLabelAfterTrack}
-    <span class="label" style:color={labelColor}><span class="label-text">{labelText}</span></span>
+    {@render label(false)}
   {/if}
 </div>
 
@@ -229,70 +226,146 @@
     grid-column: 1 / -1;
     align-items: center;
     min-width: 0;
+    min-height: calc(var(--bar-h) + 8px);
+    border-radius: 999px;
+    background: var(--capsule-bg);
+    box-shadow:
+      var(--capsule-ring),
+      var(--capsule-shadow);
     cursor: pointer;
+    animation: cl-rise 0.2s var(--ease-out);
+    transition: background-color 0.12s;
   }
 
   .row:hover {
-    background: var(--hover-bg, rgba(255, 255, 255, 0.04));
+    background: color-mix(in srgb, var(--capsule-bg) 88%, var(--text));
   }
 
   .row:focus-visible {
-    outline: 1px solid rgba(79, 142, 247, 0.8);
-    outline-offset: -1px;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* 下一件:琥珀色細外框 + 淡琥珀底 */
+  .row.next {
+    background: color-mix(in srgb, var(--accent-fill) 13%, var(--capsule-bg));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--accent-fill) 50%, transparent),
+      var(--capsule-shadow);
+  }
+
+  .row.next:hover {
+    background: color-mix(in srgb, var(--accent-fill) 19%, var(--capsule-bg));
+  }
+
+  .row.next .title {
+    font-weight: 600;
+  }
+
+  /* 「閃爍效果」:琥珀色內縮環明滅(只有倒數列、且使用者開啟才會動) */
+  .row.blink {
+    box-shadow:
+      inset 0 0 0 1.5px var(--accent-fill),
+      var(--capsule-shadow);
+    animation:
+      cl-rise 0.2s var(--ease-out),
+      cl-turn 1.2s ease-in-out 0.2s infinite;
   }
 
   .track {
     position: relative;
     min-width: 0;
+    height: var(--bar-h);
+    margin: 0 4px;
   }
 
   .bar {
     position: absolute;
     top: 0;
+    height: 100%;
     border-radius: 999px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 84%, #fff), var(--c));
+    box-shadow:
+      inset 0 -2px 0 rgb(0 0 0 / 0.22),
+      0 1px 2px rgb(0 0 0 / 0.28);
   }
 
-  .bar.blink {
-    animation: bar-blink 1s ease-in-out infinite;
-  }
-
-  @keyframes bar-blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.35;
-    }
-  }
-
-  .checkpoint-line {
+  /* 檢查點刻線:白色 + 細黑邊,在任何分類色與膠囊底上都看得見 */
+  .tick {
     position: absolute;
     top: -3px;
+    height: calc(100% + 6px);
     border-radius: 1px;
-    pointer-events: auto;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+  }
+
+  .tick.acked {
+    opacity: 0.35;
+  }
+
+  .tick.due {
+    --glow: var(--strike);
+    background: var(--strike);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.85);
+    animation: cl-glow 1.2s ease-out;
   }
 
   .label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
     white-space: nowrap;
-    padding: 0 6px;
   }
 
-  /**
-   * 標籤文字自帶底色小色塊:視窗透明時文字直接疊在桌布/網頁上,
-   * 給文字一塊主題底色墊底,不論背後是白網頁或深色桌布都清楚可讀 (使用者回饋)。
-   * 底色不隨 windowOpacity 變透(--label-bg 由 +page 以固定 alpha 提供)。
-   */
-  .label-text {
-    display: inline-block;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: var(--label-bg, rgba(20, 20, 24, 0.8));
+  .row.edge.dock-right .label {
+    padding: 0 12px 0 8px;
   }
 
+  .row.edge.dock-left .label {
+    padding: 0 8px 0 12px;
+  }
+
+  /* 標籤跟在條尾端:直接坐在膠囊(軌道)上 */
   .label-tail {
     position: absolute;
     top: 50%;
+    width: max-content;
+    padding: 0 8px;
     transform: translateY(-50%);
+  }
+
+  /* 長條放不下標籤時,標籤蓋在條上:自帶實色底,不靠條色撐對比 */
+  .label-tail.overlap {
+    height: calc(100% - 4px);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 94%, transparent);
+    box-shadow:
+      0 0 0 1px var(--border),
+      var(--capsule-shadow);
+  }
+
+  .when {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.92em;
+  }
+
+  .when.accent {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .when.strike {
+    color: var(--strike);
+  }
+
+  .title {
+    min-width: 0;
+    max-width: 13em;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

@@ -110,6 +110,25 @@ export function sortTasksForDisplay(tasks: Task[], nowMs: number): Task[] {
   return [...upcoming, ...overdue];
 }
 
+/**
+ * 「下一件」:未完成、未逾期、剩餘時間最短的任務 id(供時間軸高亮);沒有則 null。
+ * 與 sortTasksForDisplay 同一套逾期判定(deadline < now 才算逾期)。
+ */
+export function nextTaskId(tasks: Task[], nowMs: number): string | null {
+  let bestId: string | null = null;
+  let bestMs = Infinity;
+  for (const t of tasks) {
+    if (t.done) continue;
+    const deadlineMs = isoToMs(t.deadline);
+    if (deadlineMs < nowMs) continue;
+    if (deadlineMs < bestMs) {
+      bestId = t.id;
+      bestMs = deadlineMs;
+    }
+  }
+  return bestId;
+}
+
 /** 檢查點狀態判定:acked → 'acked';at ≤ now → 'due';否則 'upcoming'。 */
 export function checkpointState(cp: Checkpoint, nowMs: number): CheckpointState {
   if (cp.acked) return 'acked';

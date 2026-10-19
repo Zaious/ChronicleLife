@@ -7,18 +7,18 @@
   import { UNCATEGORIZED_COLOR } from '../core/types';
   import { tasks, categories, settings } from '../stores/app';
   import { now } from '../stores/now';
-  import { sortTasksForDisplay, barRatio, isoToMs, MS_PER_DAY } from '../core/timeline';
+  import { sortTasksForDisplay, nextTaskId, barRatio, isoToMs, MS_PER_DAY } from '../core/timeline';
   import TimelineRow from './TimelineRow.svelte';
   import EditPopover from './EditPopover.svelte';
 
   interface Props {
-    /** 目前生效的主題(system 已解析成實際的 dark/light);逾期灰階樣式需要據此調整對比度。 */
-    themeMode: 'dark' | 'light';
+    /** 清單為空時「新增第一筆」按鈕的回呼(由頁面開啟新增面板)。 */
+    onAdd?: () => void;
   }
 
-  const { themeMode }: Props = $props();
+  const { onAdd }: Props = $props();
 
-  const ROW_SPACING_PX: Record<RowSpacing, number> = { compact: 4, normal: 9, loose: 16 };
+  const ROW_SPACING_PX: Record<RowSpacing, number> = { compact: 3, normal: 6, loose: 11 };
 
   function isOverflowing(task: Task, nowMs: number, windowDays: number): boolean {
     const deadlineMs = isoToMs(task.deadline);
@@ -34,6 +34,8 @@
       ? sortedTasks.filter((t) => !isOverflowing(t, nowMs, $settings.windowDays))
       : sortedTasks,
   );
+  /** 「下一件」:剩餘時間最短且未逾期的那列,以琥珀色外框標出。 */
+  const nextId = $derived(nextTaskId($tasks, nowMs));
 
   const categoryColorMap = $derived(new Map($categories.map((c) => [c.id, c.color])));
 
@@ -87,7 +89,10 @@
 <div class="timeline-wrap">
   <div class="timeline" style:row-gap="{gapPx}px" style:grid-template-columns={gridTemplate}>
     {#if visibleTasks.length === 0}
-      <p class="empty">尚無任務,點擊右上角「+」新增一筆。</p>
+      <div class="empty">
+        <span class="muted">還沒有截止日</span>
+        <button type="button" class="btn primary" onclick={() => onAdd?.()}>新增第一筆</button>
+      </div>
     {:else}
       {#each visibleTasks as task (task.id)}
         <TimelineRow
@@ -95,7 +100,7 @@
           now={nowMs}
           settings={$settings}
           categoryColor={colorFor(task)}
-          {themeMode}
+          isNext={task.id === nextId}
           onOpen={handleRowOpen}
         />
       {/each}
@@ -127,16 +132,17 @@
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 6px 10px;
+    padding: 4px 8px 10px;
     overflow-x: hidden;
     overflow-y: auto;
   }
 
   .empty {
     grid-column: 1 / -1;
-    margin: 1rem 0 0 0;
-    text-align: center;
-    font-size: 0.85rem;
-    opacity: 0.55;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 22px;
   }
 </style>

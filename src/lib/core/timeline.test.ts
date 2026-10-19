@@ -7,6 +7,7 @@ import {
   formatCountdown,
   overdueDays,
   sortTasksForDisplay,
+  nextTaskId,
   checkpointState,
   isoToMs,
   isCheckpointTimeValid,
@@ -170,6 +171,40 @@ describe('overdueDays', () => {
 
   it('逾期 24 小時又 1ms 為 2 天', () => {
     expect(overdueDays(0, MS_PER_DAY + 1)).toBe(2);
+  });
+});
+
+describe('nextTaskId', () => {
+  it('回傳未逾期且剩餘時間最短的任務', () => {
+    const now = 0;
+    const tasks = [
+      makeTask({ id: 'far', deadline: new Date(now + 10 * MS_PER_DAY).toISOString() }),
+      makeTask({ id: 'soon', deadline: new Date(now + 1 * MS_PER_DAY).toISOString() }),
+      makeTask({ id: 'mid', deadline: new Date(now + 5 * MS_PER_DAY).toISOString() }),
+    ];
+    expect(nextTaskId(tasks, now)).toBe('soon');
+  });
+
+  it('略過已完成與已逾期的任務', () => {
+    const now = 10 * MS_PER_DAY;
+    const tasks = [
+      makeTask({ id: 'overdue', deadline: new Date(now - MS_PER_DAY).toISOString() }),
+      makeTask({ id: 'done', deadline: new Date(now + MS_PER_DAY).toISOString(), done: true }),
+      makeTask({ id: 'next', deadline: new Date(now + 3 * MS_PER_DAY).toISOString() }),
+    ];
+    expect(nextTaskId(tasks, now)).toBe('next');
+  });
+
+  it('截止時間恰為 now 仍算未逾期(與排序一致)', () => {
+    const now = 5 * MS_PER_DAY;
+    const tasks = [makeTask({ id: 'exact', deadline: new Date(now).toISOString() })];
+    expect(nextTaskId(tasks, now)).toBe('exact');
+  });
+
+  it('沒有符合的任務回傳 null', () => {
+    expect(nextTaskId([], 0)).toBeNull();
+    const tasks = [makeTask({ id: 'late', deadline: new Date(0).toISOString() })];
+    expect(nextTaskId(tasks, MS_PER_DAY)).toBeNull();
   });
 });
 

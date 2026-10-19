@@ -1,7 +1,7 @@
 # ChronicleLife — 開發規範
 
 桌面倒數時間軸 Widget(Tauri 2 + Svelte 5 + TypeScript)。
-**完整產品規格在 [docs/PLANNING.md](docs/PLANNING.md),動工前必讀。**
+**完整產品規格在 [docs/PLANNING.md](docs/PLANNING.md),動工前必讀。視覺規範在 [docs/DESIGN.md](docs/DESIGN.md)。**
 
 ## 指令
 
@@ -13,7 +13,7 @@
 ## 架構地圖與檔案歸屬
 
 ```
-src/lib/core/        純函式領域邏輯(types.ts, timeline.ts)
+src/lib/core/        純函式領域邏輯(types.ts, timeline.ts, theme.ts)
                      ★ 硬規則:禁止 import DOM / Svelte / @tauri-apps。
                      ★ 這是跨平台防腐層,所有時間計算集中於此,必配 vitest 測試。
 src/lib/stores/      Svelte stores(tasks, categories, settings)+ 持久化橋接
@@ -32,6 +32,7 @@ src-tauri/src/       Rust:視窗/tray/持久化 commands
 5. **設定即時生效**:所有 Settings 欄位變更立刻反映,不需重啟。
 6. **省電**:normal 列每分鐘 tick 一次;只有 countdown 列才跑秒級 tick;視窗隱藏時暫停。
 7. 不新增 npm/cargo 依賴,除非任務說明明確允許。
+8. **視覺**:新介面用 `src/app.css` 的共用控制項與 `core/theme.ts` 的 token;文字坐在膠囊上,不用原生下拉/色盤。規範見 [docs/DESIGN.md](docs/DESIGN.md)。
 
 ## 驗證
 

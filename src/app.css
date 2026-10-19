@@ -1,0 +1,304 @@
+/*
+ * ChronicleLife 全域樣式:共用控制項與動畫。
+ * 顏色 token(--background / --panel / --border / --text / --muted / --accent / --strike ...)
+ * 由 routes/+page.svelte 依主題以內嵌 CSS 變數注入 .shell,數值定義見 lib/core/theme.ts;這裡只放與主題無關的值。
+ * 視覺語言沿用 Basesmall / SmalLoL:藍灰底、單一琥珀強調色、膠囊、分段控制、hover 才出現的控制列。
+ */
+
+:root {
+  --font: 'Segoe UI Variable', 'Segoe UI', 'Microsoft JhengHei UI', 'PingFang TC', system-ui, sans-serif;
+  --mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.shell {
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.35;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+
+.shell button {
+  font: inherit;
+  color: inherit;
+}
+
+.shell .mono {
+  font-family: var(--mono);
+}
+
+.shell .muted {
+  color: var(--muted);
+}
+
+/* ---------- 捲軸:細、無軌道 ---------- */
+.shell ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.shell ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 4px;
+}
+
+/* ---------- 輸入框 ---------- */
+.shell .field {
+  height: 26px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--field-bg, var(--panel));
+  color: var(--text);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.shell .field::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+.shell .field:hover {
+  border-color: color-mix(in srgb, var(--border) 55%, var(--muted));
+}
+.shell .field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.shell .field.mono {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.shell .field::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+}
+.shell .field::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* ---------- 按鈕:膠囊 ---------- */
+.shell .btn {
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--border);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+.shell .btn:hover {
+  background: color-mix(in srgb, var(--border) 80%, var(--text));
+}
+.shell .btn.primary {
+  background: transparent;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent-fill) 60%, transparent);
+}
+.shell .btn.primary:hover {
+  background: color-mix(in srgb, var(--accent-fill) 16%, transparent);
+}
+.shell .btn.danger {
+  background: transparent;
+  color: var(--strike);
+  border-color: color-mix(in srgb, var(--strike) 50%, transparent);
+}
+.shell .btn.danger:hover {
+  background: color-mix(in srgb, var(--strike) 14%, transparent);
+}
+.shell .btn:focus-visible,
+.shell .icon-btn:focus-visible,
+.shell .seg button:focus-visible,
+.shell .chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 圖示按鈕:24×24 熱區、14px 圖示 */
+.shell .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+.shell .icon-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.shell .icon-btn[aria-pressed='true'] {
+  color: var(--accent);
+}
+.shell .icon-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- 分段控制(取代原生下拉) ---------- */
+.shell .seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg, var(--panel));
+}
+.shell .seg button {
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shell .seg button:hover {
+  color: var(--text);
+}
+.shell .seg button[aria-pressed='true'] {
+  background: var(--border);
+  color: var(--text);
+}
+
+/* ---------- 分類籤:膠囊 + 分類色點 ---------- */
+.shell .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--field-bg, var(--panel));
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.shell .chip:hover {
+  color: var(--text);
+}
+.shell .chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: 0 0 8px;
+}
+.shell .chip[aria-pressed='true'] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--c) 75%, var(--border));
+  background: color-mix(in srgb, var(--c) 16%, var(--field-bg, var(--panel)));
+}
+
+/* ---------- 勾選與滑桿:琥珀色 ---------- */
+.shell input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.shell input[type='range'] {
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.shell .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* ---------- 區塊標題與提示 ---------- */
+.shell .h {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.shell .error {
+  margin: 0;
+  color: var(--strike);
+  font-size: 11px;
+}
+
+/* ---------- 動畫(單發、短;減少動態偏好時一律降為瞬間) ---------- */
+@keyframes cl-rise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}
+
+/* 單發光暈:1px 色環 + 12px 擴散,衰減到 0,不循環 */
+@keyframes cl-glow {
+  from {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--glow, var(--accent-fill)) 90%, transparent),
+      0 0 12px color-mix(in srgb, var(--glow, var(--accent-fill)) 50%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* 「閃爍效果」:內縮色環明滅,比整列忽明忽暗安靜 */
+@keyframes cl-turn {
+  50% {
+    box-shadow: inset 0 0 0 1.5px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

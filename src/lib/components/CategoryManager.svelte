@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * 分類管理:清單 + 新增/改名/改色/刪除。
-   * 只依賴 stores(不依賴 shell/或 routes/),M2/M3 再打磨樣式。
+   * 只依賴 stores(不依賴 shell/或 routes/)。
    * 刪除分類時,該分類底下任務的 categoryId 由 store 端(removeCategory)設為 null(PLANNING.md §3.1 F2)。
    */
   import { categories, addCategory, updateCategory, removeCategory } from '../stores/app';
@@ -32,7 +32,7 @@
 </script>
 
 <div class="category-manager">
-  <h3>分類管理</h3>
+  <h4 class="h">分類管理</h4>
 
   <ul class="category-list">
     {#each $categories as c (c.id)}
@@ -43,67 +43,57 @@
           ariaLabel="分類顏色"
         />
         <input
-          class="name-input"
+          class="field name-input"
           type="text"
           value={c.name}
           onchange={(e) => handleRename(c.id, e)}
           aria-label="分類名稱"
         />
-        <button type="button" onclick={() => handleRemove(c.id)}>刪除</button>
+        <button type="button" class="icon-btn" onclick={() => handleRemove(c.id)} aria-label="刪除分類" title="刪除">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+        </button>
       </li>
     {:else}
-      <li class="empty">尚未建立分類</li>
+      <li class="empty muted">尚未建立分類</li>
     {/each}
   </ul>
 
   <form class="add-form" onsubmit={handleAdd}>
     <ColorPicker value={newColor} onchange={(hex) => (newColor = hex)} ariaLabel="新分類顏色" />
-    <input class="name-input" type="text" placeholder="新分類名稱" bind:value={newName} required />
-    <button type="submit">新增分類</button>
+    <input class="field name-input" type="text" placeholder="新分類名稱" bind:value={newName} required />
+    <button type="submit" class="btn primary">新增</button>
   </form>
 </div>
 
 <style>
-  .category-manager h3 {
-    margin: 0 0 0.5rem 0;
+  .category-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .category-list {
-    list-style: none;
-    margin: 0 0 0.5rem 0;
-    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .category-list li {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-  }
-
-  .empty {
-    opacity: 0.6;
+    gap: 6px;
   }
 
   .add-form {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 6px;
   }
 
   .name-input {
     flex: 1 1 140px;
-    min-width: 0;
-  }
-
-  input,
-  button {
-    font: inherit;
-  }
-
-  button {
-    cursor: pointer;
   }
 </style>

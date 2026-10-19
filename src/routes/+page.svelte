@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * 組裝層(M2):啟動流程還原視窗位置/停靠、頂部握把(置頂/停靠/管理面板開關)、
-   * 管理面板(TaskForm + CategoryManager,暫時樣式,M3 會換成正式設定面板)、Timeline 主體。
+   * 組裝層:啟動流程還原視窗位置/停靠、頂部握把(hover 才出現的控制列)、
+   * 管理面板(TaskForm / SettingsPanel)、Timeline 主體。
    * 邏輯不寫這裡 — 排序/長度計算在 core,CRUD 在 stores,視窗行為在 shell。
+   * 視覺 token 由 core/theme.ts 提供,在這裡依主題與視窗不透明度算成 CSS 變數注入 .shell。
    */
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
@@ -12,12 +13,13 @@
   import { initStores, settings, updateSettings } from '$lib/stores/app';
   import { degraded } from '$lib/stores/persistence';
   import type { DockSide } from '$lib/core/types';
+  import { PALETTES, rgba, capsuleAlpha, backgroundKind } from '$lib/core/theme';
   import Timeline from '$lib/components/Timeline.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 
   let ready = $state(false);
-  /** 「+」(新增任務)與「⚙」(設定)兩個頂部面板互斥,同時只開一個。 */
+  /** 「+」(新增任務)與設定兩個頂部面板互斥,同時只開一個。 */
   let activePanel = $state<'none' | 'add' | 'settings'>('none');
   let unlistenMoved: (() => void) | null = null;
   let systemPrefersLight = $state(false);
@@ -82,47 +84,24 @@
     $settings.theme === 'system' ? (systemPrefersLight ? 'light' : 'dark') : $settings.theme,
   );
 
-  /** 深色 = 現行配色;淺色 = 白底深字,對比夠即可 (PLANNING.md §6)。 */
-  const THEME_PALETTE = {
-    dark: { bg: '20, 20, 24', fg: '240, 240, 240', overlay: '255, 255, 255', border: '255, 255, 255' },
-    light: { bg: '255, 255, 255', fg: '28, 28, 32', overlay: '0, 0, 0', border: '0, 0, 0' },
-  } as const;
+  const palette = $derived(PALETTES[effectiveThemeMode]);
+  const windowOpacity = $derived($settings.windowOpacity);
+  const bgKind = $derived(backgroundKind(windowOpacity));
 
-  const palette = $derived(THEME_PALETTE[effectiveThemeMode]);
-  const shellBg = $derived(`rgba(${palette.bg}, ${$settings.windowOpacity})`);
-  const shellFg = $derived(`rgb(${palette.fg})`);
-  const labelColorVar = $derived(`rgba(${palette.fg}, 0.92)`);
-  /**
-   * 標籤文字色塊底色:固定 0.8 alpha(不隨 windowOpacity 變透),讓每條中文標籤
-   * 都有自己的可讀底色,無論視窗背後是白網頁或深色桌布 (使用者回饋)。
-   */
-  const labelBgVar = $derived(`rgba(${palette.bg}, 0.8)`);
-  /**
-   * 常駐時間軸的文字直接疊在桌布上,給一層與文字色相反的細陰影,
-   * 讓黑字/白字在任何桌布底色上都看得清 (使用者回饋 §文字對比)。
-   */
-  const labelShadowVar = $derived(
-    effectiveThemeMode === 'dark'
-      ? '0 1px 2px rgba(0, 0, 0, 0.75)'
-      : '0 1px 2px rgba(255, 255, 255, 0.85)',
+  /** 視窗底色隨「視窗不透明度」變透;面板與彈出卡片另用實色底,不隨它變透。 */
+  const shellBg = $derived(rgba(palette.background, windowOpacity));
+  const shellBorder = $derived(
+    bgKind === 'solid' ? palette.border : bgKind === 'semi' ? rgba(palette.border, 0.6) : 'transparent',
   );
-  const hoverBgVar = $derived(`rgba(${palette.overlay}, 0.06)`);
-  const iconHoverBgVar = $derived(`rgba(${palette.overlay}, 0.16)`);
   /**
-   * 握把列(拖曳區)背景:視窗不透明度可調到 0(全透明),但握把仍需維持一個可見、可辨識的
-   * 拖曳把手 —— 底色 alpha 設一個不隨 windowOpacity 降到 0 的地板值(0.15,高於一般 hover
-   * 疊色的 0.06),讓使用者在任何不透明度設定下都看得到、抓得到這條拖曳區。
+   * 膠囊是文字的底:視窗越透明,膠囊越實(capsuleAlpha),任何桌布或網頁上都讀得清,
+   * 取代舊版「每個標籤各墊一塊色塊 + 文字陰影」的補丁。
    */
-  const handleBgVar = $derived(`rgba(${palette.overlay}, 0.15)`);
-  const borderColorVar = $derived(`rgba(${palette.border}, 0.15)`);
-  /**
-   * 頂部管理面板(新增/設定)一律用不透明實色底:windowOpacity 只作用於常駐時間軸,
-   * 面板必須完全可讀,不隨透明度變透 (使用者回饋 §面板不透明)。
-   */
-  const panelBgVar = $derived(`rgb(${palette.bg})`);
-  const panelBorderVar = $derived(`rgba(${palette.border}, 0.08)`);
-  /** 列編輯 popover 浮在 Timeline 之上,用不透明實色底才清楚可讀。 */
-  const surfaceBgVar = $derived(`rgb(${palette.bg})`);
+  const capsuleBg = $derived(rgba(palette.panel, capsuleAlpha(windowOpacity)));
+  /** 實底時不需要陰影;用「零陰影」而非 none,才能在 box-shadow 清單裡與其他陰影並列。 */
+  const capsuleShadow = $derived(bgKind === 'solid' ? '0 0 0 0 transparent' : `0 1px 3px ${palette.shadow}`);
+  /** 膠囊的髮絲外框:讓「軌道」的範圍在實底上也看得出來(膠囊與視窗底只差一點點色差)。 */
+  const capsuleRing = $derived(`inset 0 0 0 1px ${rgba(palette.border, bgKind === 'solid' ? 0.9 : 0.55)}`);
 
   function togglePinned(): void {
     updateSettings({ alwaysOnTop: !$settings.alwaysOnTop });
@@ -151,56 +130,75 @@
 
 <main
   class="shell"
-  style:background={shellBg}
-  style:color={shellFg}
-  style:--label-color={labelColorVar}
-  style:--hover-bg={hoverBgVar}
-  style:--icon-hover-bg={iconHoverBgVar}
-  style:--border-color={borderColorVar}
-  style:--panel-bg={panelBgVar}
-  style:--panel-border={panelBorderVar}
-  style:--surface-bg={surfaceBgVar}
-  style:--handle-bg={handleBgVar}
-  style:--label-shadow={labelShadowVar}
-  style:--label-bg={labelBgVar}
+  data-bg={bgKind}
+  data-panel={activePanel !== 'none' ? activePanel : undefined}
+  style:color-scheme={effectiveThemeMode}
+  style:color={palette.text}
+  style:--background={palette.background}
+  style:--panel={palette.panel}
+  style:--border={palette.border}
+  style:--text={palette.text}
+  style:--muted={palette.muted}
+  style:--accent={palette.accent}
+  style:--accent-fill={palette.accentFill}
+  style:--strike={palette.strike}
+  style:--shell-bg={shellBg}
+  style:--shell-border={shellBorder}
+  style:--capsule-bg={capsuleBg}
+  style:--capsule-shadow={capsuleShadow}
+  style:--capsule-ring={capsuleRing}
 >
   <div class="handle" data-tauri-drag-region>
-    <span class="title">ChronicleLife</span>
-    <div class="handle-actions" role="toolbar" aria-label="視窗操作" tabindex="-1" onmousedown={stopDrag}>
+    <span class="wordmark">ChronicleLife</span>
+    <div class="actions" role="toolbar" aria-label="視窗操作" tabindex="-1" onmousedown={stopDrag}>
       <button
         type="button"
         class="icon-btn"
-        class:active={$settings.alwaysOnTop}
+        aria-pressed={$settings.alwaysOnTop}
+        aria-label={$settings.alwaysOnTop ? '取消置頂' : '置頂'}
         title={$settings.alwaysOnTop ? '取消置頂' : '置頂'}
         onclick={togglePinned}
-      >頂</button>
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5h9M8 13.5V6M5 8.5l3-3 3 3" /></svg>
+      </button>
       <button
         type="button"
         class="icon-btn"
-        class:active={activePanel === 'add'}
+        aria-pressed={activePanel === 'add'}
+        aria-label={activePanel === 'add' ? '收合新增任務面板' : '新增任務'}
         title={activePanel === 'add' ? '收合新增任務面板' : '新增任務'}
         onclick={toggleAddPanel}
-      >{activePanel === 'add' ? '−' : '+'}</button>
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          {#if activePanel === 'add'}
+            <path d="M3.5 8h9" />
+          {:else}
+            <path d="M8 3.5v9M3.5 8h9" />
+          {/if}
+        </svg>
+      </button>
       <button
         type="button"
         class="icon-btn"
-        class:active={activePanel === 'settings'}
+        aria-pressed={activePanel === 'settings'}
+        aria-label={activePanel === 'settings' ? '收合設定面板' : '設定'}
         title={activePanel === 'settings' ? '收合設定面板' : '設定'}
         onclick={toggleSettingsPanel}
-      >⚙</button>
-      <button
-        type="button"
-        class="icon-btn"
-        title="離開 ChronicleLife"
-        onclick={handleQuit}
-      >×</button>
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M2.5 5h6M11.5 5h2M2.5 11h2M7.5 11h6" />
+          <circle cx="10" cy="5" r="1.5" />
+          <circle cx="6" cy="11" r="1.5" />
+        </svg>
+      </button>
+      <button type="button" class="icon-btn" aria-label="離開 ChronicleLife" title="離開 ChronicleLife" onclick={handleQuit}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+      </button>
     </div>
   </div>
 
   {#if $degraded}
-    <div class="degraded-banner" role="alert">
-      ⚠ 資料檔讀取失敗,已進入唯讀模式,重啟後重試
-    </div>
+    <div class="degraded" role="alert">資料檔讀取失敗,已進入唯讀模式,重啟後重試</div>
   {/if}
 
   {#if activePanel === 'add'}
@@ -208,117 +206,112 @@
       <TaskForm />
     </div>
   {:else if activePanel === 'settings'}
-    <div class="panel settings">
+    <div class="panel">
       <SettingsPanel />
     </div>
   {/if}
 
   <div class="body">
-    <Timeline themeMode={effectiveThemeMode} />
+    <Timeline onAdd={() => (activePanel = 'add')} />
   </div>
 </main>
 
 <style>
-  :global(html),
-  :global(body) {
-    background: transparent;
-    margin: 0;
-    padding: 0;
-  }
-
   .shell {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100vw;
     height: 100vh;
     box-sizing: border-box;
-    border-radius: 12px;
+    border: 1px solid var(--shell-border);
+    border-radius: 14px;
+    background: var(--shell-bg);
     overflow: hidden;
-    font-family:
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      sans-serif;
+  }
+
+  /* 全透明時邊框平常隱形,hover 才浮出,讓人找得到視窗邊緣 */
+  .shell[data-bg='clear']:hover {
+    border-color: color-mix(in srgb, var(--muted) 45%, transparent);
   }
 
   .handle {
-    flex-shrink: 0;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 6px;
-    height: 28px;
-    padding: 0 8px;
-    font-size: 12px;
-    color: inherit;
-    opacity: 0.85;
-    background: var(--handle-bg, rgba(255, 255, 255, 0.15));
+    height: 30px;
+    padding: 0 6px 0 8px;
     cursor: move;
-    user-select: none;
   }
 
-  .title {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .handle-actions {
-    flex: 0 0 auto;
-    display: flex;
-    gap: 4px;
-    cursor: default;
-  }
-
-  .icon-btn {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border-radius: 6px;
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-    background: var(--hover-bg, rgba(255, 255, 255, 0.06));
-    color: inherit;
-    font: inherit;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .icon-btn:hover {
-    background: var(--icon-hover-bg, rgba(255, 255, 255, 0.16));
-  }
-
-  .icon-btn.active {
-    background: rgba(79, 142, 247, 0.55);
-    border-color: rgba(79, 142, 247, 0.8);
-  }
-
-  .degraded-banner {
-    flex-shrink: 0;
-    padding: 4px 10px;
+  /* 名牌本身也是膠囊(全透明時才有可讀的底);pointer-events 關掉,拖曳落在整條握把上 */
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--capsule-bg);
+    box-shadow:
+      var(--capsule-ring),
+      var(--capsule-shadow);
+    color: var(--muted);
     font-size: 11px;
-    line-height: 1.4;
-    color: #fff;
-    background: rgba(210, 60, 50, 0.9);
+    letter-spacing: 0.03em;
+    pointer-events: none;
   }
 
-  .panel {
-    flex-shrink: 0;
+  /* 控制列平常隱形(保持安靜),hover / 鍵盤聚焦 / 面板開著時出現 */
+  .actions {
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 8px 10px;
-    max-height: 45vh;
+    gap: 2px;
+    padding: 0 2px;
+    border-radius: 8px;
+    background: var(--capsule-bg);
+    box-shadow:
+      var(--capsule-ring),
+      var(--capsule-shadow);
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+    transition: opacity 0.15s;
+  }
+
+  .shell:hover .actions,
+  .handle:focus-within .actions,
+  .shell[data-panel] .actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .degraded {
+    flex: 0 0 auto;
+    margin: 0 8px 6px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--strike) 16%, var(--capsule-bg));
+    color: var(--strike);
+    font-size: 11px;
+  }
+
+  /* 管理面板:實色卡片,windowOpacity 只作用於常駐時間軸,面板必須完全可讀 */
+  .panel {
+    --field-bg: var(--panel);
+    flex: 0 0 auto;
+    max-height: 52vh;
+    margin: 0 6px 6px;
+    padding: 10px 12px 12px;
     overflow-y: auto;
-    background: var(--panel-bg, rgba(0, 0, 0, 0.2));
-    border-bottom: 1px solid var(--panel-border, rgba(255, 255, 255, 0.08));
-    font-size: 12px;
-    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--background);
+    animation: cl-rise 0.2s var(--ease-out);
   }
 
   .body {
     flex: 1 1 auto;
     min-height: 0;
-    text-shadow: var(--label-shadow, none);
   }
 </style>

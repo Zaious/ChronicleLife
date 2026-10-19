@@ -99,17 +99,19 @@
       title="確認"
     />
     <input
-      class="label-input"
+      class="field label-input"
       type="text"
       bind:value={label}
       onchange={commitLabel}
       aria-label="檢查點名稱"
     />
-    <button type="button" class="remove-btn" onclick={handleRemove} aria-label="移除檢查點">✕</button>
+    <button type="button" class="icon-btn" onclick={handleRemove} aria-label="移除檢查點" title="移除">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+    </button>
   </div>
   <div class="row2">
-    <input type="date" bind:value={dateStr} onblur={commitTime} />
-    <input type="time" bind:value={timeStr} onblur={commitTime} />
+    <input class="field mono" type="date" bind:value={dateStr} onblur={commitTime} aria-label="檢查點日期" />
+    <input class="field mono" type="time" bind:value={timeStr} onblur={commitTime} aria-label="檢查點時間" />
   </div>
   {#if error}
     <p class="error">{error}</p>
@@ -120,49 +122,32 @@
   .checkpoint-item {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    gap: 4px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .row1,
   .row2 {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
   }
 
   .label-input {
     flex: 1 1 auto;
-    min-width: 0;
   }
 
-  .row2 input[type='date'],
-  .row2 input[type='time'] {
-    flex: 1 1 auto;
-    min-width: 0;
+  /* 日期/時間縮排到標籤下方,與勾選框欄對齊 */
+  .row2 {
+    padding-left: 20px;
   }
 
-  .remove-btn {
-    flex: 0 0 auto;
-    cursor: pointer;
-    line-height: 1;
-    opacity: 0.7;
-  }
-
-  .remove-btn:hover {
-    opacity: 1;
-  }
-
-  input,
-  button {
-    font: inherit;
+  .row2 .field {
+    flex: 1 1 0;
   }
 
   .error {
-    margin: 0;
-    color: #ff6b6b;
-    font-size: 0.85em;
+    padding-left: 20px;
   }
 </style>

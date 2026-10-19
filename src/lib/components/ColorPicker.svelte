@@ -115,7 +115,7 @@
       <div class="hex-row">
         <input
           type="text"
-          class="hex-input"
+          class="field mono hex-input"
           bind:value={hexDraft}
           onchange={commitHex}
           placeholder="#4F8EF7"
@@ -133,55 +133,67 @@
     display: inline-flex;
   }
 
+  /* 色票:與輸入框同高(26px),內縮一圈 panel 色讓分類色像一顆嵌在膠囊裡的棋子 */
   .swatch {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 26px;
+    height: 26px;
     padding: 0;
-    border: 1px solid rgba(128, 128, 128, 0.5);
+    border: 1px solid var(--border);
     border-radius: 6px;
     cursor: pointer;
+    box-shadow: inset 0 0 0 3px var(--panel);
   }
 
+  .swatch:hover {
+    border-color: color-mix(in srgb, var(--border) 55%, var(--muted));
+  }
+
+  .swatch:focus-visible,
+  .preset:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* 色票面板:卡片,輸入框退到較深的 background */
   .palette {
+    --field-bg: var(--background);
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
     z-index: 30;
     padding: 8px;
-    border-radius: 8px;
-    background: var(--panel-bg, #2a2a30);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    border: 1px solid color-mix(in srgb, var(--border) 80%, var(--muted));
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+    animation: cl-rise 0.18s var(--ease-out);
   }
 
   .swatches {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 5px;
   }
 
   .preset {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 20px;
+    height: 20px;
     padding: 0;
-    border: 1px solid rgba(128, 128, 128, 0.4);
-    border-radius: 4px;
+    border: 1px solid rgb(0 0 0 / 0.25);
+    border-radius: 5px;
     cursor: pointer;
   }
 
   .preset.selected {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
 
   .hex-row {
-    margin-top: 6px;
+    margin-top: 8px;
   }
 
   .hex-input {
     width: 100%;
-    box-sizing: border-box;
-    font: inherit;
-    font-size: 12px;
   }
 </style>

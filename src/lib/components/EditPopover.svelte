@@ -20,6 +20,7 @@
   } from '../core/timeline';
   import { updateTask, removeTask, toggleTaskDone, addCheckpoint } from '../stores/app';
   import CheckpointItem from './CheckpointItem.svelte';
+  import CategoryChips from './CategoryChips.svelte';
 
   interface Props {
     task: Task;
@@ -85,9 +86,8 @@
     if (iso !== task.deadline) updateTask(task.id, { deadline: iso });
   }
 
-  function handleCategoryChange(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
-    updateTask(task.id, { categoryId: value === '' ? null : value });
+  function handleCategoryChange(categoryId: string | null): void {
+    updateTask(task.id, { categoryId });
   }
 
   function handleMarkDone(): void {
@@ -181,38 +181,29 @@
   role="dialog"
   aria-label="編輯任務"
 >
-  <div class="field-row">
-    <input class="title-input" type="text" bind:value={title} onchange={commitTitle} aria-label="標題" />
-  </div>
-  <div class="field-row">
-    <input type="date" bind:value={dateStr} onblur={commitDeadline} aria-label="截止日期" />
-    <input type="time" bind:value={timeStr} onblur={commitDeadline} aria-label="截止時間" />
+  <input class="field" type="text" bind:value={title} onchange={commitTitle} aria-label="標題" />
+  <div class="line">
+    <input class="field mono" type="date" bind:value={dateStr} onblur={commitDeadline} aria-label="截止日期" />
+    <input class="field mono" type="time" bind:value={timeStr} onblur={commitDeadline} aria-label="截止時間" />
   </div>
   {#if deadlineError}
     <p class="error">{deadlineError}</p>
   {/if}
-  <div class="field-row">
-    <select value={task.categoryId ?? ''} onchange={handleCategoryChange} aria-label="分類">
-      <option value="">未分類</option>
-      {#each categories as c (c.id)}
-        <option value={c.id}>{c.name}</option>
-      {/each}
-    </select>
-  </div>
+  <CategoryChips {categories} value={task.categoryId} onchange={handleCategoryChange} />
 
   <div class="checkpoints">
-    <h4>檢查點</h4>
+    <h4 class="h">檢查點</h4>
     {#each task.checkpoints as cp (cp.id)}
       <CheckpointItem taskId={task.id} checkpoint={cp} {nowMs} deadlineMs={isoToMs(task.deadline)} />
     {:else}
-      <p class="empty">尚無檢查點</p>
+      <p class="empty muted">尚無檢查點</p>
     {/each}
 
     <form class="add-checkpoint" onsubmit={handleAddCheckpoint}>
-      <input type="text" placeholder="檢查點名稱" bind:value={newLabel} aria-label="新檢查點名稱" />
-      <input type="date" bind:value={newDate} aria-label="新檢查點日期" />
-      <input type="time" bind:value={newTime} aria-label="新檢查點時間" />
-      <button type="submit">新增檢查點</button>
+      <input class="field name" type="text" placeholder="檢查點名稱" bind:value={newLabel} aria-label="新檢查點名稱" />
+      <input class="field mono" type="date" bind:value={newDate} aria-label="新檢查點日期" />
+      <input class="field mono" type="time" bind:value={newTime} aria-label="新檢查點時間" />
+      <button type="submit" class="btn">新增</button>
     </form>
     {#if addError}
       <p class="error">{addError}</p>
@@ -220,13 +211,15 @@
   </div>
 
   <div class="actions">
-    <button type="button" onclick={handleMarkDone}>標記完成</button>
-    <button type="button" class="danger" onclick={handleDelete}>刪除任務</button>
+    <button type="button" class="btn" onclick={handleMarkDone}>標記完成</button>
+    <button type="button" class="btn danger" onclick={handleDelete}>刪除任務</button>
   </div>
 </div>
 
 <style>
+  /* 浮在時間軸上的卡片:實色 panel 底,輸入框退到較深的 background 做成「凹槽」 */
   .popover {
+    --field-bg: var(--background);
     position: fixed;
     left: 8px;
     right: 8px;
@@ -235,76 +228,42 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px;
-    border-radius: 10px;
     overflow-y: auto;
-    background: var(--surface-bg, rgba(24, 24, 28, 0.98));
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    font-size: 12px;
-    color: inherit;
+    border: 1px solid color-mix(in srgb, var(--border) 80%, var(--muted));
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+    animation: cl-rise 0.2s var(--ease-out);
   }
 
-  .field-row {
+  .line {
     display: flex;
-    flex-wrap: wrap;
     gap: 6px;
   }
 
-  .title-input {
-    flex: 1 1 auto;
-    min-width: 0;
+  .line .field {
+    flex: 1 1 0;
   }
 
-  .field-row input,
-  .field-row select {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  input,
-  select,
-  button {
-    font: inherit;
-    padding: 0.3rem 0.4rem;
-  }
-
-  button {
-    cursor: pointer;
-  }
-
-  .checkpoints h4 {
-    margin: 2px 0 4px 0;
-    font-size: 0.95em;
-    opacity: 0.8;
+  .checkpoints {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .checkpoints .empty {
-    margin: 0 0 4px 0;
-    opacity: 0.55;
+    margin: 2px 0 4px 0;
   }
 
   .add-checkpoint {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px;
+    margin-top: 6px;
   }
 
-  .add-checkpoint input[type='text'] {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .add-checkpoint input[type='date'],
-  .add-checkpoint input[type='time'] {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .error {
-    margin: 4px 0 0 0;
-    color: #ff6b6b;
-    font-size: 0.9em;
+  .add-checkpoint .name {
+    grid-column: 1 / -1;
   }
 
   .actions {
@@ -312,12 +271,7 @@
     flex-wrap: wrap;
     gap: 6px;
     justify-content: flex-end;
-    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
     padding-top: 8px;
-  }
-
-  .actions .danger {
-    color: #ff6b6b;
-    border-color: rgba(255, 107, 107, 0.5);
+    border-top: 1px solid var(--border);
   }
 </style>
