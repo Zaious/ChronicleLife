@@ -44,8 +44,6 @@ ChronicleLife pins a small strip to the edge of your screen. Each deadline is a 
 
 Get `chroniclelife.exe` from the [latest release](https://github.com/Zaious/chroniclelife/releases/latest): a single portable executable with no installer. Double-click to run. It needs the Microsoft Edge WebView2 runtime, which Windows 11 includes. The executable is not code-signed, so Windows SmartScreen may ask you to confirm (More info → Run anyway). Windows only for now.
 
-> The screenshots above show the current `main` branch; releases published before the redesign look different.
-
 ## Using it
 
 - **Hover** over the window to reveal the controls: pin on top, add, settings, quit.
@@ -78,12 +76,18 @@ npm run tauri build
 
 builds the portable executable at `src-tauri/target/release/chroniclelife.exe` (no installer is produced).
 
-Pushing a `v*` tag makes GitHub Actions build and publish a release (see `.github/workflows/release.yml`):
+Pushing a `v*` tag makes GitHub Actions build the executable and publish a release straight away, with a one-line note (see `.github/workflows/release.yml`). To cut a release:
+
+1. Set the new version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, and keep `package-lock.json` and `src-tauri/Cargo.lock` in step with it. (`npm version` only touches the first one and its lockfile, so it is not enough on its own.)
+2. Commit, then tag and push the tag by name. The existing tags are lightweight, which `git push --follow-tags` does not push.
 
 ```bash
-npm version patch          # bump the version and create the commit + tag
-git push --follow-tags
+git commit -am "chore: release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main vX.Y.Z
 ```
+
+3. The release note is a fixed one-liner; replace it afterwards with `gh release edit vX.Y.Z --notes-file <file>`.
 
 The product spec is in [docs/PLANNING.md](docs/PLANNING.md) and the visual rules are in [docs/DESIGN.md](docs/DESIGN.md); both are in Traditional Chinese.
 

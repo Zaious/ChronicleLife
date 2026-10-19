@@ -44,8 +44,6 @@
 
 到 [Releases](https://github.com/Zaious/chroniclelife/releases/latest) 頁下載最新版的 `chroniclelife.exe` — 免安裝單一執行檔,雙擊即用(Win11 內建 WebView2,無需額外安裝)。執行檔未經程式碼簽章,Windows SmartScreen 可能會跳出警告(展開警告視窗的詳細資訊,再選「仍要執行」)。目前只支援 Windows。
 
-> 上面的截圖是目前 `main` 分支的樣子;改版之前發布的版本外觀不同。
-
 ## 使用
 
 - **滑鼠移上去**會浮出控制列:置頂、新增、設定、離開。
@@ -82,12 +80,18 @@ npm run tauri build
 
 ## 發布
 
-推送 `v*` 標籤即由 GitHub Actions 自動編譯並建立 Release(見 `.github/workflows/release.yml`):
+推送 `v*` 標籤即由 GitHub Actions 自動編譯並**立刻公開** Release,附一句固定的說明(見 `.github/workflows/release.yml`)。發版步驟:
+
+1. 在 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 改成新版號,並讓 `package-lock.json` 與 `src-tauri/Cargo.lock` 跟上。(`npm version` 只會改第一個與它的鎖定檔,單用它不夠。)
+2. commit 之後打 tag,並用名稱明確推送 tag。既有的 tag 都是輕量 tag,`git push --follow-tags` 不會推它們。
 
 ```bash
-npm version patch          # 更新版號並產生 commit + tag
-git push --follow-tags
+git commit -am "chore: release vX.Y.Z"
+git tag vX.Y.Z
+git push origin main vX.Y.Z
 ```
+
+3. Release 說明是固定的一句話;發布之後用 `gh release edit vX.Y.Z --notes-file <檔案>` 換成你寫的。
 
 完整產品規格見 [docs/PLANNING.md](docs/PLANNING.md),視覺規範見 [docs/DESIGN.md](docs/DESIGN.md)。
 
